@@ -6,11 +6,10 @@ import javax.swing.JPanel;
 import javax.swing.JOptionPane;
 import javax.swing.Timer;
 import java.awt.GridLayout;
-import java.awt.Graphics;
+import java.awt.event.ActionEvent;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Container;
-import java.awt.Dimension;
 import java.lang.Math;
 import java.util.Optional;
 /**
@@ -47,7 +46,7 @@ public class Jewels extends JFrame {
 	private int width;
 
 	/** the JewelButton that is currently selected */
-	private JewelButton selected = null;
+	private Optional<JewelButton> selected;
 
 	/** the number of moves the player has made so far */
 	private int numMoves = 0;
@@ -75,6 +74,7 @@ public class Jewels extends JFrame {
 		this.height = rows;
 		this.width = columns;
 		this.numJewels = numJewels;
+		selected = Optional.empty();
 		modifyBoard = new Timer(500, e -> {
 			if (checkRowsAndCols()) {
 				removeMarked();
@@ -103,6 +103,7 @@ public class Jewels extends JFrame {
 		for (int i = 0; i < height; i++) {
 			for (int j = 0; j < width; j++) {
 				buttons[i][j] = new JewelButton(i, j);
+				buttons[i][j].addActionListener(this::buttonClickUpdate);
 				buttonPanel.add(buttons[i][j]);
 			}
 		}
@@ -114,6 +115,41 @@ public class Jewels extends JFrame {
 		content.setLayout(new BorderLayout());
 		content.add(buttonPanel, BorderLayout.CENTER);
 		content.add(restart, BorderLayout.SOUTH);
+	}
+	
+	private void buttonClickUpdate(ActionEvent e) {
+		if (modifyBoard.isRunning() || checkWin()) {
+			return;
+		}
+		JewelButton source = (JewelButton) e.getSource();
+		if (!selected.isPresent()) {
+			selected = Optional.of(source);
+			source.setSelected(true);
+			return;
+		}
+		
+		JewelButton selectedButton = selected.get();
+		if (source.adjacentTo(selectedButton)) {
+			source.swapColors(selectedButton);
+			rowStart(source).ifPresent(this::markRow);
+			colStart(source).ifPresent(this::markCol);
+			rowStart(selectedButton).ifPresent(this::markRow);
+			colStart(selectedButton).ifPresent(this::markCol);
+			if (source.getNeedsRemoved() || selectedButton.getNeedsRemoved()) {
+				numMoves++;
+				removeMarked();
+				modifyBoard.start();
+			}
+			else {
+				source.swapColors(selectedButton);
+			}
+			selected = Optional.empty();
+			selectedButton.setSelected(false);
+		} else {
+			selected = Optional.empty();
+			selectedButton.setSelected(false);
+			selectedButton.repaint();
+		}
 	}
 
 	/**
@@ -128,6 +164,7 @@ public class Jewels extends JFrame {
 				} while (completesRowOrCol(buttons[i][j]));
 				buttons[i][j].setNeedsRemoved(false);
 				buttons[i][j].setWasRemoved(false);
+				buttons[i][j].setSelected(false);
 			}
 		}
 	}
@@ -278,195 +315,6 @@ public class Jewels extends JFrame {
 		return true;
 	}
 	
-	/**
-	 * A tile class for the Jewels game.
-	 */
-	public class JewelButton extends JButton {
-		private static final long serialVersionUID = 1L;
-
-		/** the color of the button */
-		private Color color = null;
-
-		/** whether the button should be removed by removeMarked() */
-		private boolean needsRemoved;
-
-		/** whether the button has been removed at some point */
-		private boolean wasRemoved;
-
-		/** the row the button is in */
-		private int row;
-
-		/** the column the button is in */
-		private int column;
-
-		/**
-		 * constructor: sets the color of the button and adds the actionListener
-		 * @param color the color of the button
-		 */
-		public JewelButton(int row, int column) {
-			this.row = row;
-			this.column = column;
-			addActionListener(e -> performChecks());
-			boundSize(new Dimension(50, 50));
-		}
-		
-		private void boundSize(Dimension dims) {
-			setPreferredSize(dims);
-			setMaximumSize(dims);
-			setMinimumSize(dims);
-		}
-
-		/**
-		 * get the value of needsRemoved
-		 * @return the value of needsRemoved
-		 */
-		public boolean getNeedsRemoved() {
-			return needsRemoved;
-		}
-
-		/**
-		 * set the value of needsRemoved
-		 * @param needsRemoved the value to set
-		 */
-		public void setNeedsRemoved(boolean needsRemoved) {
-			this.needsRemoved = needsRemoved;
-			wasRemoved = true;
-		}
-
-		/**
-		 * get the value of wasRemoved
-		 * @return the value of wasRemoved
-		 */
-		public boolean getWasRemoved() {
-			return wasRemoved;
-		}
-
-		/**
-		 * set the value of wasRemoved
-		 * @param wasRemoved the value to set
-		 */
-		public void setWasRemoved(boolean wasRemoved) {
-			this.wasRemoved = wasRemoved;
-		}
-
-		/** gets the row the button is in */
-		public int getRow() {
-			return row;
-		}
-
-		/** gets the column the button is in */
-		public int getColumn() {
-			return column;
-		}
-
-		/**
-		 * gets the color of this button
-		 * @return the button's color
-		 */
-		public Color getColor() {
-			return color;
-		}
-
-		/**
-		 * set the color of this button
-		 * @param color the new color for this button
-		 */
-		public void setColor(Color color) {
-			this.color = color;
-			repaint();
-		}
-
-		/**
-		 * Paints the tile. Outlines the tile if it is selected, gives it a yellow background if
-		 * it has been removed and then paints the jewel on the button.
-		 * @param g the Graphics object associated with this component
-		 */
-		public void paintComponent(Graphics g) {
-			super.paintComponent(g);
-			
-			int width = getWidth();
-			int height = getHeight();
-			
-			int[] xCoords = {width / 2, width - 10, width / 2, 10};
-			int[] yCoords = {10, height / 2, height - 10, height / 2};
-			
-			g.setColor(wasRemoved ? Color.yellow : Color.white);
-			if (this == selected) {
-				setBackground(Color.gray);
-				g.fillRect(4, 4, width - 8, height - 8);
-			} else {
-				g.fillRect(0, 0, width, height);
-			}
-			
-			g.setColor(color);
-			g.fillPolygon(xCoords, yCoords, 4);
-			g.setColor(color.darker());
-			g.drawPolygon(xCoords, yCoords, 4);
-		}
-
-		/**
-		 * Sets this tile as selected if no tile has been selected.
-		 * Otherwise, if the tiles are adjacent and one of the tiles creates a row of 3 or more,
-		 * removes the rows and continues checking for more rows until none remain. Nothing happens
-		 * if the game has been won or if tiles are still being removed.
-		 */
-		private void performChecks() {
-			if (modifyBoard.isRunning() || checkWin()) {
-				return;
-			}
-			if (selected == null) {
-				selected = this;
-			} else if (adjacentTo(selected)) {
-				swapColors(selected);
-				rowStart(this).ifPresent(Jewels.this::markRow);
-				colStart(this).ifPresent(Jewels.this::markCol);
-				rowStart(selected).ifPresent(Jewels.this::markRow);
-				colStart(selected).ifPresent(Jewels.this::markCol);
-				if (this.getNeedsRemoved() || selected.getNeedsRemoved()) {
-					numMoves++;
-					removeMarked();
-					modifyBoard.start();
-				}
-				else {
-					swapColors(selected);
-				}
-				selected = null;
-			} else {
-				JewelButton temp = selected; // stores the selected button so it can be repainted
-				selected = null;
-				temp.repaint();
-			}
-		}
-		
-		/**
-		 * determines if this button is adjacent to another
-		 * @param other the second button
-		 * @return true if the buttons are adjacent
-		 */
-		private boolean adjacentTo(JewelButton other) {
-			int dX = Math.abs(getColumn() - other.getColumn());
-			int dY = Math.abs(getRow() - other.getRow());
-			return (dX == 1 && dY == 0) || (dY == 1 && dX == 0);
-		}
-
-		/**
-		 * swaps the color of this button with another
-		 * @param other the second button
-		 */
-		private void swapColors(JewelButton other) {
-			Color temp = getColor();
-			setColor(other.getColor());
-			other.setColor(temp);
-		}
-		
-		/**
-		 * Checks if this button has the same color as another.
-		 */
-		public boolean isSameColor(JewelButton other) {
-			return getColor().equals(other.getColor());
-		}
-	}
-
 	/**
 	 * checks if a valid height, width and number of jewels have been passed as arguments and creates a new jewels game.
 	 * calls the default constructor if 0-2 arguments have been passed
