@@ -196,7 +196,7 @@ public class Jewels extends JFrame {
 	private void resetGame() {
 		modifyBoard.stop();
 		resetBoard();
-		selected = null;
+		selected = Optional.empty();
 		numMoves = 0;
 	}
 
