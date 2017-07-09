@@ -90,6 +90,7 @@ public class Jewels extends JFrame {
 		initializeBoard();
 		// initialize the colors
 		resetBoard();
+		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setSize(width * 50, (height + 1) * 50);
 		setVisible(true);
 	}
